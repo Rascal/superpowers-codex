@@ -9,11 +9,10 @@ Locate the installed plugin relative to this file. Never assume a personal home
 directory or a particular cache version. Read the plugin's README for the supported
 installation and update flow.
 
-Check that `python` resolves to Python 3.9 or newer. The CLI can also be invoked
-with `python3`, but bundled hook commands use `python` for the same command across
-macOS, Linux and Windows. If only `python3` is available, explain the requirement
-and offer the hook configuration described in the README. Do not install Python,
-change PATH, or edit user configuration without the user's authorization.
+Check that `python3` resolves to Python 3.9+ on macOS/Linux, or `python` resolves
+to Python 3.9+ on Windows. Bundled hooks select the interpreter through Codex's
+`commandWindows` override. If the expected interpreter is unavailable, explain
+that prerequisite. Do not install Python or change PATH without authorization.
 
 Run the installed review-gate CLI with `--help` to verify imports and runtime.
 Explain that task data stays in each target workspace's `.review-gate/`, outside

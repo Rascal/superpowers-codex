@@ -1,6 +1,6 @@
 # Superpowers Codex
 
-A distributable Codex plugin for review-gated development. Version 0.2.0 adds fixed
+A distributable Codex plugin for review-gated development. Version 0.2.1 includes fixed
 verification contracts, durable task ownership and dependencies, independent
 finding-aware reviews, final integration review, and optional lifecycle hooks.
 
@@ -40,25 +40,27 @@ For an offline transfer, build with `python3 scripts/build_plugin.py` (Windows:
 to the other computer, extract it to a permanent directory, and add that root:
 
 ```sh
-codex plugin marketplace add /absolute/path/to/superpowers-codex-0.2.0
+codex plugin marketplace add /absolute/path/to/superpowers-codex-0.2.1
 codex plugin add superpowers-codex@superpowers-codex
 ```
 
 On Windows, quote the path, for example
-`codex plugin marketplace add "C:\Tools\superpowers-codex-0.2.0"`.
+`codex plugin marketplace add "C:\Tools\superpowers-codex-0.2.1"`.
 Choose either the GitHub source or the extracted source for this marketplace.
 The ZIP contains the same marketplace name and plugin; it is an alternative source,
 not an additional installation.
 
 ## Python and hooks
 
-Use Python 3.9 or newer. The CLI may be launched with `python3` or `python`.
-Bundled hook commands use `python`, which must resolve to Python 3.9+ on PATH.
-On a macOS/Linux machine that only provides `python3`, before registering the
-extracted marketplace, edit the two commands in
-`plugins/superpowers-codex/hooks/hooks.json` to use `python3` instead. Then install
-and trust that hook definition. No shell alias or machine-specific path is baked
-into the archive. Windows installations should enable Python on PATH.
+Use Python 3.9 or newer. The CLI and default hooks use `python3` on macOS/Linux.
+The documented `commandWindows` override uses `python` on Windows and reads the
+installed path from `PLUGIN_ROOT` inside Python, so paths with spaces work without
+shell-specific environment-variable syntax. Ensure that platform's interpreter is
+on PATH; no `python` alias is needed on macOS/Linux.
+
+After installation, open **Settings > Hooks** (or `/hooks` in the CLI) to review
+and trust the two hook definitions. Codex skips untrusted hooks. A plugin update
+that changes a hook or its script requires another review.
 
 ## Use
 

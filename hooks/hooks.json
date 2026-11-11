@@ -1,6 +1,29 @@
 {
   "hooks": {
-    "SessionStart": [{"matcher": "startup|resume|compact", "hooks": [{"type": "command", "command": "python \"${PLUGIN_ROOT}/skills/review-gated-development/scripts/codex_hook.py\"", "timeout": 10}]}],
-    "Stop": [{"hooks": [{"type": "command", "command": "python \"${PLUGIN_ROOT}/skills/review-gated-development/scripts/codex_hook.py\"", "timeout": 10}]}]
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/skills/review-gated-development/scripts/codex_hook.py\"",
+            "timeout": 10,
+            "commandWindows": "python -c \"import os,sys; sys.path.insert(0,os.path.join(os.environ['PLUGIN_ROOT'],'skills','review-gated-development','scripts')); import codex_hook; sys.exit(codex_hook.main())\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/skills/review-gated-development/scripts/codex_hook.py\"",
+            "timeout": 10,
+            "commandWindows": "python -c \"import os,sys; sys.path.insert(0,os.path.join(os.environ['PLUGIN_ROOT'],'skills','review-gated-development','scripts')); import codex_hook; sys.exit(codex_hook.main())\""
+          }
+        ]
+      }
+    ]
   }
 }

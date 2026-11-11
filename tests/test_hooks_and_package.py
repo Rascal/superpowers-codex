@@ -1,5 +1,7 @@
 import json
+import os
 from pathlib import Path
+import shlex
 import subprocess
 import sys
 import zipfile
@@ -72,6 +74,39 @@ class HookTests(GateCase):
 
 
 class PackageTests(GateCase):
+    def extracted_plugin(self):
+        archive = self.build()
+        destination = self.root / "installed plugin with spaces"
+        with zipfile.ZipFile(archive) as bundle:
+            bundle.extractall(destination)
+        return next(destination.rglob("plugin.json")).parent
+
+    def test_packaged_native_hook_commands_execute(self):
+        plugin = self.extracted_plugin()
+        hooks = json.loads((plugin / "hooks/hooks.json").read_text(encoding="utf-8"))["hooks"]
+        environment = dict(os.environ, PLUGIN_ROOT=str(plugin))
+        for event, groups in hooks.items():
+            handler = groups[0]["hooks"][0]
+            command = handler["commandWindows"] if os.name == "nt" else handler["command"]
+            payload = {"hook_event_name": event, "session_id": "smoke", "cwd": str(self.root)}
+            with self.subTest(event=event):
+                result = subprocess.run(command, shell=True, cwd=self.root, env=environment,
+                                        input=json.dumps(payload), text=True, capture_output=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(json.loads(result.stdout), {})
+
+    def test_windows_hook_override_imports_relocated_runtime(self):
+        plugin = self.extracted_plugin()
+        hooks = json.loads((plugin / "hooks/hooks.json").read_text(encoding="utf-8"))["hooks"]
+        command = shlex.split(hooks["Stop"][0]["hooks"][0]["commandWindows"])
+        self.assertEqual(command[0], "python")
+        command[0] = sys.executable
+        result = subprocess.run(command, cwd=self.root, env=dict(os.environ, PLUGIN_ROOT=str(plugin)),
+                                input=json.dumps({"hook_event_name": "Stop", "session_id": "smoke", "cwd": str(self.root)}),
+                                text=True, capture_output=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout), {})
+
     def test_repository_catalog_resolves_plugin_at_repository_root(self):
         catalog = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
         self.assertEqual(catalog["name"], "superpowers-codex")
