@@ -5,6 +5,9 @@ description: Execute independently reviewed plans with fixed verification contra
 
 # Review-gated development
 
+Before any subagent dispatch, apply the mandatory
+[same-model/same-effort policy](references/subagents.md).
+
 Require independent review for every coherent implementation task in this workflow.
 Scale planning to uncertainty and impact. Honor existing user authorization; do not
 ask again for settled decisions or automatically commit, push, or open a PR.

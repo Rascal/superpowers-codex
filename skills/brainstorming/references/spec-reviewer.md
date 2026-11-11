@@ -1,5 +1,8 @@
 # Independent spec reviewer
 
+The dispatching agent must apply the
+[same-model/same-effort policy](../../review-gated-development/references/subagents.md).
+
 Give a fresh subagent the following request plus the actual packet and repository
 context. Do not supply the author's self-assessment or a preferred verdict.
 

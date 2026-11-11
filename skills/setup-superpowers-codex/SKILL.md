@@ -5,6 +5,9 @@ description: Check the runtime and explain activation of the Superpowers Codex p
 
 # Set up Superpowers Codex
 
+If delegating setup checks, apply the mandatory
+[same-model/same-effort policy](../review-gated-development/references/subagents.md).
+
 Locate the installed plugin relative to this file. Never assume a personal home
 directory or a particular cache version. Read the plugin's README for the supported
 installation and update flow.

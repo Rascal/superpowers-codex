@@ -5,6 +5,9 @@ description: Turn an independently approved spec into detailed task contracts an
 
 # Writing plans
 
+Before any subagent dispatch, apply the mandatory
+[same-model/same-effort policy](../review-gated-development/references/subagents.md).
+
 Use the CLI and [planning schema](../review-gated-development/references/planning.md)
 from the sibling review-gated-development skill. Read planning-status and the
 current spec packet. If current spec approval is missing, return to brainstorming;

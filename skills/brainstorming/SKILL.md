@@ -5,6 +5,9 @@ description: Clarify software ideas and choose spike, bounded, or architectural 
 
 # Brainstorming
 
+Before any subagent dispatch, apply the mandatory
+[same-model/same-effort policy](../review-gated-development/references/subagents.md).
+
 Explore the repository and original request before choosing the depth of planning.
 Native Plan mode is useful when active; do not invent mode-switch tools or bypass
 its write restrictions. If writes are unavailable, discuss and review artifacts in
