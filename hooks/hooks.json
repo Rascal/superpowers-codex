@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "SessionStart": [{"matcher": "startup|resume|compact", "hooks": [{"type": "command", "command": "python \"${PLUGIN_ROOT}/skills/review-gated-development/scripts/codex_hook.py\"", "timeout": 10}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "python \"${PLUGIN_ROOT}/skills/review-gated-development/scripts/codex_hook.py\"", "timeout": 10}]}]
+  }
+}

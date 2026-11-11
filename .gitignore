@@ -1,0 +1,4 @@
+__pycache__/
+.review-gate/
+.DS_Store
+*.pyc

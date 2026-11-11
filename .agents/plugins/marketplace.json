@@ -1,0 +1,20 @@
+{
+  "name": "superpowers-codex",
+  "interface": {
+    "displayName": "Superpowers Codex"
+  },
+  "plugins": [
+    {
+      "name": "superpowers-codex",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
