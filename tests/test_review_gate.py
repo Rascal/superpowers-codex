@@ -162,11 +162,16 @@ class LifecycleTests(GateCase):
         self.assertEqual(self.state()['state'], 'implementing')
 
     def test_output_is_bounded_and_crlf_normalized(self):
-        self.create(contract('import sys; sys.stdout.write("x" * 40000 + "VERIFIED\\r\\n")'))
+        self.create(contract('import sys; sys.stdout.buffer.write(b"x" * 40000 + b"VERIFIED\\r\\n")'))
         check = self.verify()['verification']['checks'][0]
         self.assertTrue(check['stdout_truncated'])
         self.assertLessEqual(len(check['stdout']), 32768)
         self.assertTrue(check['stdout'].endswith('VERIFIED\n'))
+
+    def test_native_text_newlines_are_normalized(self):
+        self.create(contract('print("VERIFIED")'))
+        check = self.verify()['verification']['checks'][0]
+        self.assertEqual(check['stdout'], 'VERIFIED\n')
 
     def test_check_mutating_source_invalidates_evidence(self):
         self.create(contract('from pathlib import Path; Path("app.py").write_text("answer = 0"); print("VERIFIED")'))
