@@ -1,6 +1,6 @@
 # Superpowers Codex
 
-A distributable Codex plugin for review-gated development. Version 0.2.1 includes fixed
+A distributable Codex plugin for review-gated development. Version 0.2.2 includes fixed
 verification contracts, durable task ownership and dependencies, independent
 finding-aware reviews, final integration review, and optional lifecycle hooks.
 
@@ -28,7 +28,7 @@ Codex installs its own cached copy, so development edits in a checkout do not
 silently modify a friend's installation.
 
 The catalog at `.agents/plugins/marketplace.json` points to the plugin at the
-repository root. No separate marketplace repository or server is needed.
+repository root. Its native manifest is `.codex-plugin/plugin.json`. No separate marketplace repository or server is needed.
 Codex supports this [Git-backed marketplace workflow](https://developers.openai.com/plugins/build/plugins).
 Bundled hooks require trust and manual desktop installation; hook-containing
 plugins are not eligible for the universal public plugin directory.
@@ -40,15 +40,28 @@ For an offline transfer, build with `python3 scripts/build_plugin.py` (Windows:
 to the other computer, extract it to a permanent directory, and add that root:
 
 ```sh
-codex plugin marketplace add /absolute/path/to/superpowers-codex-0.2.1
+codex plugin marketplace add /absolute/path/to/superpowers-codex-0.2.2
 codex plugin add superpowers-codex@superpowers-codex
 ```
 
 On Windows, quote the path, for example
-`codex plugin marketplace add "C:\Tools\superpowers-codex-0.2.1"`.
+`codex plugin marketplace add "C:\Tools\superpowers-codex-0.2.2"`.
 Choose either the GitHub source or the extracted source for this marketplace.
 The ZIP contains the same marketplace name and plugin; it is an alternative source,
 not an additional installation.
+
+## Hook discovery compatibility
+
+Version 0.2.2 uses the native `.codex-plugin/plugin.json` manifest. On the tested
+Codex build, the portable root manifest loaded skills but silently omitted bundled
+hooks; retaining that root manifest also masked the compatibility manifest. The
+release therefore has one native entry point and no competing root `plugin.json`.
+
+Both SessionStart and Stop must appear in the native hook list before installation
+is considered verified. `scripts/check_native_hooks.py` checks the source manifest
+through Codex's read-only metadata API; add `--require-installed` to check the
+installed hook listing too. This does not trust hooks, execute them, or bind chats.
+The setup skill remains available for explicit invocation.
 
 ## Python and hooks
 
@@ -90,7 +103,7 @@ codex plugin add superpowers-codex@superpowers-codex
 ```
 
 Start a new chat after updating. Re-review hook trust when the definition changes.
-Release versions belong in `plugin.json`; Git tags can be selected with the
+Release versions belong in `.codex-plugin/plugin.json`; Git tags can be selected with the
 marketplace command's `--ref` option when you want a fixed release.
 
 For ZIP installs, replace the extracted marketplace at its registered path with
@@ -108,6 +121,7 @@ remove that old marketplace after switching to the GitHub source.
 ```sh
 python3 -B -m unittest discover -s tests -v
 python3 scripts/build_plugin.py
+python3 scripts/check_native_hooks.py
 ```
 
 Tests cover failed and vacuous verification, stale code/rounds/dependencies,
@@ -125,6 +139,7 @@ not establish semantic correctness by themselves. Hooks ask Codex to continue or
 surface incomplete work; they do not prevent bypassing the CLI or replace host
 permissions. No API key, external service, or MCP server is required.
 
-The hook adapter is tested using documented JSON inputs and outputs. Real host
-installation/trust and Linux/Windows execution must be validated on those hosts
-before claiming they passed; neither is implied by local unit tests.
+Native discovery is tested when the Codex CLI is installed; CI runners without
+Codex skip that check. Tests on those runners still exercise packaging and hook
+commands. Discovery and successful script execution do not grant hook trust: the
+user reviews hooks in Codex before lifecycle execution is enabled.

@@ -1,14 +1,9 @@
 {
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "superpowers-codex",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "repository": "https://github.com/Rascal/superpowers-codex",
   "homepage": "https://github.com/Rascal/superpowers-codex",
   "description": "Review-gated development with immutable verification contracts, durable tasks, and independent review.",
-  "extensions": {
-    "com.openai": {
-      "hooks": ["./hooks/hooks.json"],
-      "onboardingSkill": "./skills/setup-superpowers-codex/SKILL.md"
-    }
-  }
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json"
 }

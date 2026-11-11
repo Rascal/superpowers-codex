@@ -18,6 +18,11 @@ Run the installed review-gate CLI with `--help` to verify imports and runtime.
 Explain that task data stays in each target workspace's `.review-gate/`, outside
 the installed plugin. Updating the plugin must preserve that directory.
 
+Confirm that SessionStart and Stop are listed in Settings > Hooks (or `/hooks` in
+the CLI). An empty list is a discovery failure, not a trust prompt; do not describe
+installation as verified until both are visible. This plugin uses the native
+`.codex-plugin/plugin.json` entry point.
+
 Hooks require the host's trust review. They are inactive for a chat until its real
 session ID is explicitly bound to a plan with `bind`. Read the workflow skill to
 create and bind a plan if the user asks to adopt it; setup alone does not authorize

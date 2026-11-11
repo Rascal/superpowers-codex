@@ -79,7 +79,7 @@ class PackageTests(GateCase):
         destination = self.root / "installed plugin with spaces"
         with zipfile.ZipFile(archive) as bundle:
             bundle.extractall(destination)
-        return next(destination.rglob("plugin.json")).parent
+        return next(destination.rglob(".codex-plugin/plugin.json")).parent.parent
 
     def test_packaged_native_hook_commands_execute(self):
         plugin = self.extracted_plugin()
@@ -113,9 +113,12 @@ class PackageTests(GateCase):
         plugin = catalog["plugins"][0]
         plugin_path = (ROOT / plugin["source"]["path"]).resolve()
         self.assertEqual(plugin_path, ROOT)
-        manifest = json.loads((plugin_path / "plugin.json").read_text(encoding="utf-8"))
+        self.assertFalse((plugin_path / "plugin.json").exists())
+        manifest = json.loads((plugin_path / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
         self.assertEqual(plugin["name"], manifest["name"])
         self.assertEqual(manifest["repository"], "https://github.com/Rascal/superpowers-codex")
+        self.assertEqual(manifest["skills"], "./skills/")
+        self.assertTrue((plugin_path / manifest["hooks"]).is_file())
 
     def build(self):
         result = subprocess.run([sys.executable, str(ROOT / "scripts/build_plugin.py"), "--output", str(self.root / "release")],
@@ -132,7 +135,8 @@ class PackageTests(GateCase):
             catalog = json.loads(bundle.read(catalog_name))
             self.assertEqual(catalog["name"], "superpowers-codex")
             plugin_root = catalog_name.split("/.agents/")[0] + "/" + catalog["plugins"][0]["source"]["path"][2:]
-            manifest = json.loads(bundle.read(plugin_root + "/plugin.json"))
+            self.assertNotIn(plugin_root + "/plugin.json", names)
+            manifest = json.loads(bundle.read(plugin_root + "/.codex-plugin/plugin.json"))
             self.assertEqual(manifest["name"], "superpowers-codex")
             self.assertIn(plugin_root + "/skills/review-gated-development/scripts/review_gate.py", names)
             self.assertIn(plugin_root + "/hooks/hooks.json", names)

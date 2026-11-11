@@ -12,11 +12,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def build(destination):
-    manifest = json.loads((ROOT / "plugin.json").read_text(encoding="utf-8"))
+    manifest_path = ROOT / ".codex-plugin/plugin.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     name, version = manifest["name"], manifest["version"]
     marketplace = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
     marketplace["plugins"][0]["source"]["path"] = "./plugins/" + name
-    files = [ROOT / "plugin.json", ROOT / "README.md"]
+    files = [manifest_path, ROOT / "README.md"]
     files += [path for folder in ("skills", "hooks") for path in (ROOT / folder).rglob("*")
               if path.is_file() and "__pycache__" not in path.parts and path.suffix in (".py", ".md", ".json")]
     destination = Path(destination)
