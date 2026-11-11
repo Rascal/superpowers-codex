@@ -52,7 +52,7 @@ class GateCase(unittest.TestCase):
 
     def create(self, definition=None, name='example', claim=True, success=True):
         value = definition or contract()
-        result = self.call('create', name, '--contract', '-', payload=value, success=success)
+        result = self.call('create', name, '--contract', '-', '--execution-only', 'Isolated execution test', payload=value, success=success)
         if success and claim:
             self.call('claim', name, '--owner', 'implementer-1')
         return result
@@ -129,7 +129,7 @@ class LifecycleTests(GateCase):
     def test_contract_file_changes_do_not_change_stored_contract(self):
         path = self.root / '.review-gate/contract.json'
         path.write_text(json.dumps(contract()), encoding='utf-8')
-        self.call('create', 'example', '--contract', str(path))
+        self.call('create', 'example', '--contract', str(path), '--execution-only', 'Isolated execution test')
         path.write_text(json.dumps(contract('pass')), encoding='utf-8')
         self.call('claim', 'example', '--owner', 'implementer-1')
         self.finish()
@@ -360,7 +360,7 @@ class LifecycleTests(GateCase):
                  'state': 'completed', 'baseline': gate.fingerprint(self.root), 'attempts': [], 'active_attempt': None}}}
         (self.root / '.review-gate/state.json').write_text(json.dumps(value), encoding='utf-8')
         self.call('complete', 'legacy', '--owner', 'old-owner', success=False)
-        self.call('adopt', 'legacy', '--contract', '-', payload=contract())
+        self.call('adopt', 'legacy', '--contract', '-', '--execution-only', 'Legacy migration test', payload=contract())
         task = self.state('legacy')
         self.assertEqual(task['state'], 'pending')
         self.assertEqual(task['legacy_record']['state'], 'completed')

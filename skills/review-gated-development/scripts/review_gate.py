@@ -11,6 +11,8 @@ import uuid
 from gate_contract import identifier, validate_contract, validate_dependency_declarations, verify_contract
 from gate_review import apply_report
 from gate_store import GateError, Store, digest, fingerprint, nonempty, now, require
+from planning_commands import ACTIONS, add_planning_parsers, dispatch_planning
+from planning_model import planning_context, planning_status, require_task_planning
 
 
 def read_json(path):
@@ -37,7 +39,8 @@ def require_owner(task, owner):
     require(nonempty(owner) and task["owner"] == owner.strip(), "Only the recorded owner may perform this action")
 
 
-def dependency_receipts(task, tasks, visiting=None):
+def dependency_receipts(task, data, visiting=None):
+    tasks = data["tasks"]
     visiting = set() if visiting is None else set(visiting)
     require(task["id"] not in visiting, "Dependency cycle detected")
     visiting.add(task["id"])
@@ -46,9 +49,10 @@ def dependency_receipts(task, tasks, visiting=None):
         require(name in tasks, "Missing dependency: " + name)
         dependency = tasks[name]
         check_contract(dependency)
+        require_task_planning(data, dependency)
         require(dependency["state"] == "completed", "Dependency is incomplete: " + name)
         attempt = active_attempt(dependency)
-        require(attempt["dependencies"] == dependency_receipts(dependency, tasks, visiting), "Dependency approval is stale: " + name)
+        require(attempt["dependencies"] == dependency_receipts(dependency, data, visiting), "Dependency approval is stale: " + name)
         require(attempt["review"] and attempt["review"]["verdict"] == "approved", "Dependency has no approval: " + name)
         require(attempt["verification"]["status"] == "passed", "Dependency verification did not pass: " + name)
         receipts[name] = {"generation": dependency["generation"], "round": attempt["id"], "snapshot": attempt["snapshot"]["digest"]}
@@ -64,11 +68,12 @@ def invalidate(task, reason):
     event(task, "evidence_invalidated", reason=reason)
 
 
-def require_current(task, attempt, store, tasks):
+def require_current(task, attempt, store, data):
     try:
+        require_task_planning(data, task)
         require(attempt["contract_digest"] == task["contract_digest"], "Contract evidence is stale")
         require(fingerprint(store.root)["digest"] == attempt["snapshot"]["digest"], "Workspace changed; approval and verification are stale")
-        require(attempt["dependencies"] == dependency_receipts(task, tasks), "Dependency evidence is stale")
+        require(attempt["dependencies"] == dependency_receipts(task, data), "Dependency evidence is stale")
     except GateError as error:
         invalidate(task, str(error))
         raise
@@ -95,9 +100,23 @@ def review_packet(task, attempt, store, tasks):
             "dependencies": attempt["dependencies"], "dependency_findings": dependency_findings}
 
 
+def execution_mode(task):
+    return "planned" if task.get("planning_receipt") else ("execution-only" if task.get("execution_only_reason") else "legacy")
+
+
 def plan_status(data, plan, root):
     tasks = [task for task in data["tasks"].values() if task.get("version") == 2 and task["contract"]["plan"] == plan]
-    require(tasks, "Unknown plan: " + plan)
+    planning = data.get("planning", {}).get(plan)
+    require(tasks or planning, "Unknown plan: " + plan)
+    if planning:
+        summary = planning_status(planning)
+        if summary["phase"] != "executing":
+            complete = summary["phase"] == "spike_complete" or (summary["phase"] == "ready" and not summary["execution_intent"])
+            return {"plan": plan, "complete": complete, "planning": summary,
+                    "completion_scope": "investigation" if summary["path"] == "spike" else ("execution" if summary["execution_intent"] else "planning"),
+                    "issues": [] if complete else ["Planning: " + summary["phase"]],
+                    "blocked": [plan] if summary["phase"] in ("blocked", "superseded") else [],
+                    "tasks": [{"id": task["id"], "state": task["state"], "owner": task["owner"]} for task in tasks]}
     issues = []
     integration = [task for task in tasks if task["contract"]["kind"] == "integration"]
     if not integration:
@@ -109,7 +128,8 @@ def plan_status(data, plan, root):
             continue
         attempt = active_attempt(task)
         try:
-            require(attempt["dependencies"] == dependency_receipts(task, data["tasks"]), "Dependency evidence is stale")
+            require_task_planning(data, task)
+            require(attempt["dependencies"] == dependency_receipts(task, data), "Dependency evidence is stale")
             require(attempt["review"] and attempt["review"]["verdict"] == "approved", "Missing approval")
             require(attempt["verification"]["status"] == "passed", "Missing passing verification")
             if task["contract"]["kind"] == "integration":
@@ -123,10 +143,14 @@ def plan_status(data, plan, root):
 
 def dispatch(store, data, args):
     tasks = data["tasks"]
+    if args.action in ACTIONS:
+        return dispatch_planning(store, data, args, new_task)
     if args.action in ("create", "adopt"):
         require(identifier(args.id), "Invalid task ID")
         contract = read_json(args.contract)
         validate_contract(contract)
+        require(contract["plan"] not in data.get("planning", {}), "Managed plans import reviewed tasks through start-execution")
+        require(nonempty(args.execution_only), "Use the planning workflow, or explicitly supply --execution-only REASON")
         legacy = None
         if args.action == "adopt":
             require(args.id in tasks and tasks[args.id].get("version") == 1, "Only legacy tasks can be adopted")
@@ -139,11 +163,12 @@ def dispatch(store, data, args):
         if legacy:
             task["legacy_record"] = legacy
             task["implementers"].append(legacy["implementer"].strip())
-        event(task, args.action)
+        task["execution_only_reason"] = args.execution_only
+        event(task, args.action, execution_only_reason=args.execution_only)
         tasks[args.id] = task
         return task
     if args.action == "list":
-        return [{"id": task["id"], "state": task["state"], "version": task.get("version", 1), "owner": task.get("owner")} for task in tasks.values()]
+        return [{"id": task["id"], "state": task["state"], "version": task.get("version", 1), "owner": task.get("owner"), "execution_mode": execution_mode(task)} for task in tasks.values()]
     if args.action == "plan-status":
         return plan_status(data, args.plan, store.root)
     if args.action == "bind":
@@ -158,15 +183,17 @@ def dispatch(store, data, args):
     require(args.id in tasks, "Unknown task: " + args.id)
     task = tasks[args.id]
     if args.action == "show":
-        return task
+        return dict(task, execution_mode=execution_mode(task))
     check_contract(task)
+    if args.action in ("claim", "verify", "request-review", "packet", "review", "complete"):
+        require_task_planning(data, task)
     if args.action == "claim":
         require(nonempty(args.owner), "Owner is required")
         if task["owner"]:
             require_owner(task, args.owner)
             return task
         require(task["state"] == "pending", "Task cannot be claimed in this state")
-        dependency_receipts(task, tasks)
+        dependency_receipts(task, data)
         others = [other["id"] for other in tasks.values() if other.get("version") == 2 and other["owner"] and other["state"] != "completed"]
         require(not others, "Workspace is already owned by: " + ", ".join(others))
         task["owner"] = args.owner.strip()
@@ -199,7 +226,7 @@ def dispatch(store, data, args):
     if args.action == "verify":
         require_owner(task, args.owner)
         require(task["state"] in ("implementing", "verifying", "reviewing"), "Task is not ready for verification")
-        dependencies = dependency_receipts(task, tasks)
+        dependencies = dependency_receipts(task, data)
         attempt = {"id": str(uuid.uuid4()), "snapshot": fingerprint(store.root), "contract_digest": task["contract_digest"],
                    "dependencies": dependencies, "verification": {"status": "running"}, "review": None}
         task["attempts"].append(attempt)
@@ -208,7 +235,7 @@ def dispatch(store, data, args):
         event(task, "verification_started", round=attempt["id"])
         store.save(data)
         attempt["verification"] = verify_contract(store.root, task["contract"])
-        require_current(task, attempt, store, tasks)
+        require_current(task, attempt, store, data)
         event(task, "verification_finished", round=attempt["id"], status=attempt["verification"]["status"])
         if attempt["verification"]["status"] != "passed":
             task["state"] = "implementing"
@@ -219,19 +246,19 @@ def dispatch(store, data, args):
         require(task["state"] == "verifying", "Review requires successful verification")
         attempt = active_attempt(task)
         require(attempt["verification"]["status"] == "passed", "Verification did not pass")
-        require_current(task, attempt, store, tasks)
+        require_current(task, attempt, store, data)
         task["state"] = "reviewing"
         event(task, "review_requested", round=attempt["id"])
     if args.action in ("request-review", "packet"):
         require(task["state"] == "reviewing", "Task is not awaiting review")
         attempt = active_attempt(task)
-        require_current(task, attempt, store, tasks)
-        return review_packet(task, attempt, store, tasks)
+        require_current(task, attempt, store, data)
+        return dict(review_packet(task, attempt, store, tasks), planning=planning_context(data, task))
     if args.action == "review":
         require(task["state"] == "reviewing", "Task is not awaiting review")
         attempt = active_attempt(task)
         require(args.round == attempt["id"], "Review round is stale or belongs to another task")
-        require_current(task, attempt, store, tasks)
+        require_current(task, attempt, store, data)
         result = apply_report(task, attempt, args.reviewer, read_json(args.report))
         event(task, "review_recorded", round=attempt["id"], reviewer=args.reviewer, verdict=result["verdict"])
         return result
@@ -239,7 +266,7 @@ def dispatch(store, data, args):
         require_owner(task, args.owner)
         require(task["state"] in ("reviewing", "completed"), "Completion requires independent approval")
         attempt = active_attempt(task)
-        require_current(task, attempt, store, tasks)
+        require_current(task, attempt, store, data)
         require(attempt["verification"]["status"] == "passed", "Verification did not pass")
         review = attempt["review"]
         require(review and review["verdict"] == "approved", "Completion requires independent approval")
@@ -261,6 +288,7 @@ def parser():
         action = actions.add_parser(name)
         action.add_argument("id")
         action.add_argument("--contract", required=True)
+        action.add_argument("--execution-only", metavar="REASON")
     for name in ("show", "packet"):
         actions.add_parser(name).add_argument("id")
     actions.add_parser("list")
@@ -282,6 +310,7 @@ def parser():
     bind.add_argument("--session", required=True)
     bind.add_argument("--plan", required=True)
     actions.add_parser("unbind").add_argument("--session", required=True)
+    add_planning_parsers(actions)
     return result
 
 

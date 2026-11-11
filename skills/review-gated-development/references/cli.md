@@ -8,6 +8,13 @@ The CLI emits JSON on stdout; rejected operations emit JSON on stderr and exit 1
 Argument errors exit 2. State lives only in the project's `.review-gate/state.json`.
 The plugin's installation directory is never used as a task store.
 
+## Plan before creating execution tasks
+
+New work uses [the planning lifecycle](planning.md): brainstorming, spec review,
+plan writing and plan review, then atomic task import. Direct create/adopt below
+is only for an explicit execution-only choice. Existing legacy task records remain
+usable without manufactured planning approvals.
+
 ## Create a fixed contract
 
 Save a contract in `.review-gate/task.json`, or supply JSON on stdin with `-`:
@@ -51,11 +58,12 @@ exits nonzero on failure. For multiple targets, use separate checks with explici
 target arguments; for one-then-all ordering, use dependent tasks.
 
 Contracts are copied and hashed at creation. Editing the source JSON afterward
-changes nothing. There is no verify-time command or timeout override and no
+changes nothing. Direct creation needs a nonempty execution-only reason and cannot target a managed
+planning record. There is no verify-time command or timeout override and no
 contract-edit command. Create a new task/plan for changed requirements.
 
 ```sh
-gate create prices --contract .review-gate/task.json
+gate create prices --contract .review-gate/task.json --execution-only "User supplied external execution contracts"
 gate claim prices --owner actual-agent-id
 gate verify prices --owner actual-agent-id
 gate request-review prices --owner actual-agent-id
@@ -183,7 +191,10 @@ CLI mutations use the lock. A process interruption may leave verification marked
 `running`; rerun it before review. Windows uses byte-range locks, POSIX uses flock.
 
 Version-1 task records remain readable but cannot be completed under the new
-rules. `adopt ID --contract FILE` preserves their original objective, criteria,
+rules. `adopt ID --contract FILE --execution-only REASON` preserves their original objective, criteria,
 baseline, and full legacy record while clearing eligibility for completion. Fresh
 ownership, verification, and review are required. Existing completed history is
 never silently promoted to stronger verification guarantees.
+
+Planning-managed stores use format 3 so older runtimes fail closed. See the
+[planning compatibility rules](planning.md#spikes-and-recovery).

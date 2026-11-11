@@ -105,9 +105,10 @@ class Store:
 
     def load(self):
         if not self.path.exists():
-            return {"version": 2, "workspace": str(self.root), "tasks": {}, "bindings": {}}
+            return {"version": 3, "workspace": str(self.root), "tasks": {}, "bindings": {}}
         data = json.loads(self.path.read_text(encoding="utf-8"))
-        require(isinstance(data, dict) and data.get("version") in (1, 2), "Unsupported task store")
+        require(isinstance(data, dict) and data.get("version") in (1, 2, 3), "Unsupported task store")
+        require(not data.get("planning") or data["version"] == 3, "Planning records require store format 3")
         require(data.get("workspace") == str(self.root), "Task store belongs to another workspace")
         require(isinstance(data.get("tasks"), dict), "Invalid task store")
         if data["version"] == 1:

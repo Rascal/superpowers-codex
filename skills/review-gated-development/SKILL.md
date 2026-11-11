@@ -1,6 +1,6 @@
 ---
 name: review-gated-development
-description: Implement coding tasks with fixed verification contracts, durable ownership and dependencies, and independent review through the bundled task-state CLI. Use when a user adopts this workflow for a project or task.
+description: Execute independently reviewed plans with fixed verification contracts, durable ownership, and independent task reviews. Use when implementing an approved Superpowers Codex plan or resuming its execution workflow.
 ---
 
 # Review-gated development
@@ -16,6 +16,13 @@ Read [the CLI contract](references/cli.md) for schemas and commands.
 
 ## Before implementation
 
+- For new work, use brainstorming followed by writing-plans. They obtain separate
+  independent spec and plan reviews. `start-execution` imports their approved
+  contracts; do not recreate or alter imported tasks manually. Planning-only intent
+  stops after plan review. See [planning lifecycle](references/planning.md).
+- For existing tasks, inspect execution_mode. Legacy records remain executable
+  under their original guarantees. New direct create/adopt requires an explicit
+  user choice and `--execution-only REASON`; it cannot bypass a managed plan.
 - Record the objective, constraints, user decisions, criterion IDs, dependencies,
   and exact verification commands in the contract. Each criterion must map to
   checks; each check needs a timeout and positive output assertions. Include target
@@ -24,9 +31,10 @@ Read [the CLI contract](references/cli.md) for schemas and commands.
 - Infer routine verification choices from the repository. Ask only when missing
   information materially affects correctness, scope, or authorization. Do not
   replace an expensive required check with a cheaper one.
-- Create tasks in dependency order, then create one integration task depending on
-  every implementation task. This seals the plan against additional tasks. Changed
-  requirements need a new task/plan; do not edit stored contracts or weaken checks.
+- Imported task sets already contain ordered dependencies and final integration.
+  For an explicitly chosen execution-only workflow, create tasks in dependency
+  order and end with one integration task depending on every implementation task.
+  Changed requirements need a superseding/new plan; do not weaken stored contracts.
 - Claim each task using the actual implementing agent ID before editing. Only one
   task can own a workspace at a time. Use separate worktrees for parallel work.
   A pending dependency blocks claim. Resume existing owners; do not duplicate them.

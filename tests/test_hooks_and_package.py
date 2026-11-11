@@ -1,12 +1,15 @@
 import json
 import os
 from pathlib import Path
+import posixpath
+import re
 import shlex
 import subprocess
 import sys
 import zipfile
 
 from test_review_gate import GateCase, ROOT, SCRIPTS, contract
+from planning_model import validate_plan, validate_spec
 
 
 class HookTests(GateCase):
@@ -74,6 +77,33 @@ class HookTests(GateCase):
 
 
 class PackageTests(GateCase):
+    def test_documented_planning_examples_match_runtime_schemas(self):
+        reference = ROOT / 'skills/review-gated-development/references/planning.md'
+        examples = [json.loads(value) for value in re.findall(r'```json\n(.*?)\n```', reference.read_text(encoding='utf-8'), re.DOTALL)]
+        spec = next(value for value in examples if 'requirements' in value)
+        plan = next(value for value in examples if 'tasks' in value)
+        validate_spec(spec)
+        validate_plan(plan, {'id': 'label-validation'}, spec, {})
+
+    def test_archive_contains_all_four_skills_and_their_relative_references(self):
+        archive = self.build()
+        with zipfile.ZipFile(archive) as bundle:
+            names = set(bundle.namelist())
+            manifest = next(name for name in names if name.endswith('/.codex-plugin/plugin.json'))
+            root = manifest.rsplit('/.codex-plugin/', 1)[0]
+            expected = {'brainstorming', 'writing-plans', 'review-gated-development', 'setup-superpowers-codex'}
+            actual = {name[len(root + '/skills/'):].split('/')[0] for name in names if name.endswith('/SKILL.md')}
+            self.assertEqual(actual, expected)
+            for name in names:
+                if not name.startswith(root + '/skills/') or not name.endswith('.md'):
+                    continue
+                for target in re.findall(r'\]\(([^)]+)\)', bundle.read(name).decode('utf-8')):
+                    target = target.split('#', 1)[0]
+                    if not target or '://' in target:
+                        continue
+                    resolved = posixpath.normpath(posixpath.join(posixpath.dirname(name), target))
+                    self.assertIn(resolved, names, name + ' links to missing ' + target)
+
     def extracted_plugin(self):
         archive = self.build()
         destination = self.root / "installed plugin with spaces"
@@ -156,7 +186,7 @@ class PackageTests(GateCase):
                                     input=json.dumps(payload) if payload else None, text=True, capture_output=True, timeout=10)
             self.assertEqual(result.returncode, 0, result.stderr)
             return json.loads(result.stdout)
-        run("create", "portable", "--contract", "-", payload=contract())
+        run("create", "portable", "--contract", "-", "--execution-only", "Isolated relocation test", payload=contract())
         run("claim", "portable", "--owner", "worker")
         evidence = run("verify", "portable", "--owner", "worker")
         self.assertEqual(evidence["verification"]["status"], "passed")
@@ -164,3 +194,11 @@ class PackageTests(GateCase):
         run("review", "portable", "--round", packet["round"], "--reviewer", "reviewer", "--report", "-",
             payload={"verdict": "approved", "spec_review": "Meets C1", "quality_review": "Checked", "findings": [], "resolutions": []})
         self.assertEqual(run("complete", "portable", "--owner", "worker")["state"], "completed")
+        brief = workspace / '.review-gate/brief.md'
+        brief.write_text('Investigate whether the installed CLI works without the source checkout.', encoding='utf-8')
+        run('planning-create', 'portable-spike', '--path', 'spike', '--reason', 'Installation feasibility probe',
+            '--author', 'probe-author', '--brief', str(brief))
+        run('spike-finish', 'portable-spike', '--author', 'probe-author', '--file', '-', payload={
+            'findings': 'Installed execution succeeded', 'evidence': ['The relocated task reached completed'],
+            'recommendation': 'Use the installed CLI', 'limitations': []})
+        self.assertTrue(run('plan-status', 'portable-spike')['complete'])

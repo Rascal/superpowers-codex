@@ -1,9 +1,9 @@
 {
   "name": "superpowers-codex",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "repository": "https://github.com/Rascal/superpowers-codex",
   "homepage": "https://github.com/Rascal/superpowers-codex",
-  "description": "Review-gated development with immutable verification contracts, durable tasks, and independent review.",
+  "description": "Adaptive brainstorming, independently reviewed specs and plans, and verified task execution.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json"
 }

@@ -15,8 +15,14 @@ to Python 3.9+ on Windows. Bundled hooks select the interpreter through Codex's
 that prerequisite. Do not install Python or change PATH without authorization.
 
 Run the installed review-gate CLI with `--help` to verify imports and runtime.
+Confirm that brainstorming, writing-plans, review-gated-development, and this setup
+skill are discoverable. New work starts with brainstorming; existing execution
+records can resume through review-gated-development.
 Explain that task data stays in each target workspace's `.review-gate/`, outside
 the installed plugin. Updating the plugin must preserve that directory.
+Managed planning uses store format 3. Older 0.2 runtimes reject it; do not lower
+the version field to make an older runtime proceed. The new runtime can read
+legacy stores, without claiming their tasks had spec or plan review.
 
 Confirm that SessionStart and Stop are listed in Settings > Hooks (or `/hooks` in
 the CLI). An empty list is a discovery failure, not a trust prompt; do not describe

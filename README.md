@@ -1,8 +1,9 @@
 # Superpowers Codex
 
-A distributable Codex plugin for review-gated development. Version 0.2.2 includes fixed
-verification contracts, durable task ownership and dependencies, independent
-finding-aware reviews, final integration review, and optional lifecycle hooks.
+A distributable Codex plugin for review-gated development. Version 0.3.0 adds adaptive
+brainstorming, independent spec review before planning, detailed implementation
+plans, and independent plan review before execution. The existing verification,
+task reviews, final integration review and optional lifecycle hooks remain.
 
 The runtime uses Python 3.9+ and its standard library. It targets macOS, Linux,
 and Windows. Local development checks run on macOS; the included GitHub Actions
@@ -40,19 +41,19 @@ For an offline transfer, build with `python3 scripts/build_plugin.py` (Windows:
 to the other computer, extract it to a permanent directory, and add that root:
 
 ```sh
-codex plugin marketplace add /absolute/path/to/superpowers-codex-0.2.2
+codex plugin marketplace add /absolute/path/to/superpowers-codex-0.3.0
 codex plugin add superpowers-codex@superpowers-codex
 ```
 
 On Windows, quote the path, for example
-`codex plugin marketplace add "C:\Tools\superpowers-codex-0.2.2"`.
+`codex plugin marketplace add "C:\Tools\superpowers-codex-0.3.0"`.
 Choose either the GitHub source or the extracted source for this marketplace.
 The ZIP contains the same marketplace name and plugin; it is an alternative source,
 not an additional installation.
 
 ## Hook discovery compatibility
 
-Version 0.2.2 uses the native `.codex-plugin/plugin.json` manifest. On the tested
+Since version 0.2.2, the plugin uses the native `.codex-plugin/plugin.json` manifest. On the tested
 Codex build, the portable root manifest loaded skills but silently omitted bundled
 hooks; retaining that root manifest also masked the compatibility manifest. The
 release therefore has one native entry point and no competing root `plugin.json`.
@@ -77,21 +78,41 @@ that changes a hook or its script requires another review.
 
 ## Use
 
-Invoke the **review-gated-development** skill for a task or project. It records the
-objective, constraints, prior decisions, acceptance criteria, check commands,
-timeouts, and required output assertions before implementation. The CLI executes
-that stored contract; an exit-zero command without the required output fails.
+Start new work with **brainstorming**. It selects a spike, bounded or architectural
+path, clarifies requirements and obtains independent spec review. Then
+**writing-plans** creates detailed tasks and gets a separate fresh plan review.
+**review-gated-development** executes the approved task graph. The fourth skill,
+**setup-superpowers-codex**, checks installation and runtime prerequisites.
 
-Every task needs independent review. Blocking findings must be resolved explicitly
-by a reviewer. Completed implementation tasks feed a final integration task, whose
-review covers the combined workspace before the plan can be called complete.
+The pipeline is: clarify → spec → spec review → plan → plan review → execution.
+Bounded work keeps artifacts short; architectural work receives deeper design and
+interface analysis. A spike ends with evidence and a recommendation, without
+importing implementation tasks.
 
-See [the workflow skill](skills/review-gated-development/SKILL.md) and
-[CLI schemas and examples](skills/review-gated-development/references/cli.md).
+Planning-only is the default for a new planning record. A reviewed plan can finish
+without starting implementation. Record the user's actual implementation intent
+when it is given; review approval itself does not grant permission to execute.
 
-Task records remain in each project’s `.review-gate/`, separate from the installed
-plugin. Keep the workspace still during review. Work is serialized per workspace;
-use separate worktrees for parallel development.
+Spec/plan approvals bind to immutable revisions. Changed specs invalidate old plan
+approval. Task import is atomic, checks requirement coverage and dependencies, and
+pins both planning revisions. After import, changed requirements need a superseding
+plan. Blocking findings must be explicitly resolved by an independent reviewer.
+
+Every execution task runs its stored verification contract and receives independent
+review. Final integration reviews the combined workspace and accumulated findings.
+State persists in `.review-gate/`; only one task owns a workspace at a time. Use
+separate worktrees for parallel implementation.
+
+See [brainstorming](skills/brainstorming/SKILL.md),
+[writing plans](skills/writing-plans/SKILL.md),
+[planning schemas](skills/review-gated-development/references/planning.md), and
+[execution commands](skills/review-gated-development/references/cli.md).
+
+Managed planning creates store format 3. Upgrade the runtime before using it:
+older 0.2 versions reject that format. Legacy stores remain readable, and existing
+tasks are not retroactively described as having planning review. Deliberate direct
+contract execution requires `--execution-only REASON`; it cannot bypass a managed
+plan. Native Plan mode restrictions and planning-only user requests still apply.
 
 ## Update and remove
 
