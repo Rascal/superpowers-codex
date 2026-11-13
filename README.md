@@ -1,15 +1,17 @@
 # Superpowers Codex
 
-A distributable Codex plugin for review-gated development. Version 0.3.1 includes adaptive
+A distributable Codex plugin for review-gated development. Version 0.3.2 includes adaptive
 brainstorming, independent spec review before planning, detailed implementation
 plans, and independent plan review before execution. The existing verification,
 task reviews, final integration review and optional lifecycle hooks remain.
 
-All subagents must use the main chat's model and reasoning effort, including every
-reviewer and descendant. Guaranteed inheritance is preferred; defaults or custom
-profiles must not silently select different settings. Fresh context is independent
-of model choice. This is mandatory dispatch guidance, not a host-enforced model
-lock. See the [subagent policy](skills/review-gated-development/references/subagents.md).
+All subagents must use the main chat's model, including every reviewer and
+descendant. Reasoning effort is capped at **Max**: **Ultra → Max**; Max and lower
+settings stay unchanged. An Ultra parent must request Max for its subagents unless
+the host configuration already guarantees it. Defaults or custom profiles must not
+silently change the required settings. Fresh context is independent of model choice.
+This is mandatory dispatch guidance, not a host-enforced lock. See the
+[subagent policy](skills/review-gated-development/references/subagents.md).
 
 The runtime uses Python 3.9+ and its standard library. It targets macOS, Linux,
 and Windows. Local development checks run on macOS; the included GitHub Actions
@@ -47,12 +49,12 @@ For an offline transfer, build with `python3 scripts/build_plugin.py` (Windows:
 to the other computer, extract it to a permanent directory, and add that root:
 
 ```sh
-codex plugin marketplace add /absolute/path/to/superpowers-codex-0.3.1
+codex plugin marketplace add /absolute/path/to/superpowers-codex-0.3.2
 codex plugin add superpowers-codex@superpowers-codex
 ```
 
 On Windows, quote the path, for example
-`codex plugin marketplace add "C:\Tools\superpowers-codex-0.3.1"`.
+`codex plugin marketplace add "C:\Tools\superpowers-codex-0.3.2"`.
 Choose either the GitHub source or the extracted source for this marketplace.
 The ZIP contains the same marketplace name and plugin; it is an alternative source,
 not an additional installation.

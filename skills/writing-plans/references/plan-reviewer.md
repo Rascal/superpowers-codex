@@ -1,7 +1,7 @@
 # Independent plan reviewer
 
 The dispatching agent must apply the
-[same-model/same-effort policy](../../review-gated-development/references/subagents.md).
+[subagent model and effort policy](../../review-gated-development/references/subagents.md).
 
 Give a fresh subagent the actual plan packet, original request and relevant source
 context. Do not include author self-review or a proposed verdict.
