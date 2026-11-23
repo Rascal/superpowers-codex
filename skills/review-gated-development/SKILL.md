@@ -19,10 +19,11 @@ Read [the CLI contract](references/cli.md) for schemas and commands.
 
 ## Before implementation
 
-- For new work, use brainstorming followed by writing-plans. They obtain separate
-  independent spec and plan reviews. `start-execution` imports their approved
-  contracts; do not recreate or alter imported tasks manually. Planning-only intent
-  stops after plan review. See [planning lifecycle](references/planning.md).
+- For new work, use brainstorming followed by writing-plans for independent spec
+  and plan reviews. For implementation, show the reviewed plan to the user and
+  wait for their go-ahead on that revision. `start-execution` imports it with
+  `--revision` and `--user-approval`. Planning-only work ends when the reviewed
+  plan is delivered. See [planning lifecycle](references/planning.md).
 - For existing tasks, inspect execution_mode. Legacy records remain executable
   under their original guarantees. New direct create/adopt requires an explicit
   user choice and `--execution-only REASON`; it cannot bypass a managed plan.
@@ -68,7 +69,9 @@ Read [the CLI contract](references/cli.md) for schemas and commands.
 6. Invoke `complete` only after approval. Advisory findings remain visible. After
    all implementation tasks, execute and independently review the integration
    task against the entire change and accumulated findings. Check `plan-status`
-   before claiming the plan is complete.
+  before claiming the plan is complete. If implementation needs a material change
+  to the approved approach, supersede it and return the replacement plan through
+  independent and human review before implementing the change.
 
 ## Recovery and optional hooks
 
@@ -84,8 +87,9 @@ can proceed. Do not infer agent death from a missing notification.
 
 Bundled hooks require host trust and an explicit session-to-plan `bind`. Bind only
 when the user adopts this workflow for that chat, using the real host session ID.
-The SessionStart hook can expose that ID. Stop requests one continuation for
-unfinished work; blocked work or a repeated continuation produces a visible
+The SessionStart hook can expose that ID. Stop yields while a reviewed plan awaits
+the user. For actionable unfinished work, it requests one continuation. Blocked
+work or a repeated continuation produces a visible
 warning instead. User interruption takes priority. The adapter reads structured
 state and never interprets success phrases as proof.
 

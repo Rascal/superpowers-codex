@@ -182,27 +182,41 @@ The CLI validates records and structure, not the semantic truth of a review.
 
 ## Handoff and scope
 
-A planning-only record reaches phase `ready` after plan approval. `plan-status`
-then reports `complete: true` with `completion_scope: planning`. No tasks have been
-created; the Stop hook permits the planning response to finish.
+A planning-only record reaches `ready` after independent plan approval. Deliver
+the reviewed plan. Its `plan-status` has `complete: true` with
+`completion_scope: planning`. A record with implementation intent instead reaches
+`awaiting_user_review`. SessionStart exposes the pending phase and revision.
+Stop yields while the user considers the plan.
 
-When the user requests implementation, record that actual intent and import tasks:
+Present the independently approved `plan-packet` revision as described in the
+[writing-plans handoff](../../writing-plans/SKILL.md#present-the-plan-for-human-review).
+Keep the revision you actually showed. To start, pass that ID and the user's
+affirmative reply on that plan as literal arguments. If the user requested only
+a plan originally and now asks to implement the displayed revision, the same
+reply supplies the intent and the go-ahead.
 
 ```sh
 gate planning-authorize label-validation --author ACTUAL_AUTHOR_ID \
-  --reason "The user asked to implement this reviewed plan"
-gate start-execution label-validation
+  --reason "ACTUAL_REPLY_TO_THE_SHOWN_PLAN"
+gate start-execution label-validation --revision REVISION_SHOWN_TO_USER \
+  --user-approval "ACTUAL_REPLY_TO_THE_SHOWN_PLAN"
 ```
 
-No new permission question is needed when implementation was already authorized;
-record its existing basis. Authorization alone imports nothing and bypasses no
-reviews. Spikes, blocked and superseded records reject authorization. Approved
-execution-intent plans remain incomplete until their integration task completes.
+The first command is needed only when intent is missing. An earlier implementation
+request or agent verdict leaves the human decision pending. For feedback, revise
+the affected spec or plan, repeat its independent review and present the new
+revision. For a hold, record the reason with `planning-block`. Spikes, blocked
+and superseded records cannot start execution.
 
-Start validates the current approvals and imports the entire task graph atomically.
-A task ID collision imports nothing. Repeating start returns the same task IDs.
-Imported contracts and planning receipts are frozen. Continue with the execution
-skill's claim/verify/review/complete loop; every operation checks planning eligibility.
+On first import, `start-execution` checks the independent approvals, intent,
+revision and nonblank reply before creating tasks. A stale ID or task collision
+leaves the task list untouched. The resulting execution record stores
+`user_approval` alongside `receipt.plan_revision`, `receipt.plan_digest` and
+`started_at`. The CLI trusts the coordinator to relay the human's actual reply.
+An agent resuming an existing import can call `start-execution PLAN` with no flags
+to retrieve the original record. If both flags are supplied again, they must
+match that record. Continue with the execution skill's claim/verify/review/complete
+loop. Managed plans with execution intent finish after integration review.
 
 For a user deliberately choosing external execution contracts, direct create/adopt
 requires `--execution-only "Reason for the explicit exception"`. The reason is
@@ -231,7 +245,10 @@ Carry unresolved findings and decisions into its brief. Existing release/block/
 reopen/recover commands can maintain ownership but cannot revive superseded work.
 
 Use planning-status, stage packets, their review_verdict fields and findings to
-resume after interruption. All revisions/reviews remain in history. Store format3
-is required for managed planning; the new runtime reads v1/2 stores, while older
-runtimes reject format3. Version-1 tasks still require adoption into fixed contracts.
-Never rewrite a version header or invent prior planning approval to bypass this.
+resume after interruption. All revisions and reviews remain in history. The runtime
+reads store formats 1 through 4. A write to a store containing managed plans uses
+format 4, which v0.3.2 and earlier cannot read. Reading status leaves the stored
+format alone. Upgrade clients that share the workspace. A pending plan needs a
+human decision on first import. An existing import keeps its original receipt,
+including when it predates human review. Version-1 tasks still require adoption
+into fixed contracts.

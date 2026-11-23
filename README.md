@@ -1,9 +1,10 @@
 # Superpowers Codex
 
-A distributable Codex plugin for review-gated development. Version 0.3.2 includes adaptive
-brainstorming, independent spec review before planning, detailed implementation
-plans, and independent plan review before execution. The existing verification,
-task reviews, final integration review and optional lifecycle hooks remain.
+A distributable Codex plugin for review-gated development. In version 0.4.0,
+after an independent agent reviews the plan, you see the proposed change, its
+simplest viable alternative when there is one, and what any extra complexity
+would cost to deploy or maintain. You can approve the plan, ask to simplify it,
+or put it on hold before implementation starts.
 
 All subagents must use the main chat's model, including every reviewer and
 descendant. Reasoning effort is capped at **Max**: **Ultra → Max**; Max and lower
@@ -49,12 +50,12 @@ For an offline transfer, build with `python3 scripts/build_plugin.py` (Windows:
 to the other computer, extract it to a permanent directory, and add that root:
 
 ```sh
-codex plugin marketplace add /absolute/path/to/superpowers-codex-0.3.2
+codex plugin marketplace add /absolute/path/to/superpowers-codex-0.4.0
 codex plugin add superpowers-codex@superpowers-codex
 ```
 
 On Windows, quote the path, for example
-`codex plugin marketplace add "C:\Tools\superpowers-codex-0.3.2"`.
+`codex plugin marketplace add "C:\Tools\superpowers-codex-0.4.0"`.
 Choose either the GitHub source or the extracted source for this marketplace.
 The ZIP contains the same marketplace name and plugin; it is an alternative source,
 not an additional installation.
@@ -88,18 +89,23 @@ that changes a hook or its script requires another review.
 
 Start new work with **brainstorming**. It selects a spike, bounded or architectural
 path, clarifies requirements and obtains independent spec review. Then
-**writing-plans** creates detailed tasks and gets a separate fresh plan review.
+**writing-plans** creates detailed tasks, gets a separate fresh plan review,
+and presents the reviewed revision to you.
 **review-gated-development** executes the approved task graph. The fourth skill,
 **setup-superpowers-codex**, checks installation and runtime prerequisites.
 
-The pipeline is: clarify → spec → spec review → plan → plan review → execution.
+The workflow runs from a reviewed spec to a reviewed plan. You decide when that
+plan is ready to implement.
 Bounded work keeps artifacts short; architectural work receives deeper design and
 interface analysis. A spike ends with evidence and a recommendation, without
 importing implementation tasks.
 
-Planning-only is the default for a new planning record. A reviewed plan can finish
-without starting implementation. Record the user's actual implementation intent
-when it is given; review approval itself does not grant permission to execute.
+Planning-only is the default for a new record. If you only want a plan, the
+workflow ends with delivery of the reviewed plan. When implementation is
+requested, Codex waits for your reply on the specific revision it showed you.
+If you ask for changes, the revised plan goes through independent review and
+comes back to you. The first task import records your go-ahead with the exact
+revision. The CLI trusts Codex to relay your reply.
 
 Spec/plan approvals bind to immutable revisions. Changed specs invalidate old plan
 approval. Task import is atomic, checks requirement coverage and dependencies, and
@@ -116,11 +122,12 @@ See [brainstorming](skills/brainstorming/SKILL.md),
 [planning schemas](skills/review-gated-development/references/planning.md), and
 [execution commands](skills/review-gated-development/references/cli.md).
 
-Managed planning creates store format 3. Upgrade the runtime before using it:
-older 0.2 versions reject that format. Legacy stores remain readable, and existing
-tasks are not retroactively described as having planning review. Deliberate direct
-contract execution requires `--execution-only REASON`; it cannot bypass a managed
-plan. Native Plan mode restrictions and planning-only user requests still apply.
+Upgrade each client sharing a workspace before its first write to a store with
+managed plans. Version 0.4.0 reads older stores and writes such stores in format
+4. Earlier plugin releases reject format 4. Pending plans need your decision at
+first import. Tasks imported on an older release resume with their original
+history. Direct contract execution requires an explicit `--execution-only REASON`
+and applies only outside managed plans. Native Plan mode restrictions still apply.
 
 ## Update and remove
 

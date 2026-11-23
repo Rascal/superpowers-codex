@@ -52,17 +52,27 @@ class PlanningTests(GateCase):
         self.review_artifact('spec', packet)
         return packet
 
-    def planning_ready(self):
-        self.register()
+    def planning_ready(self, path='bounded'):
+        self.register(path=path)
         self.spec_ready()
         packet = self.submit('plan')
         self.review_artifact('plan', packet)
         return packet
 
+    def start(self, packet, *, reply='Go ahead with this plan.', success=True):
+        return self.call('start-execution', PLAN, '--revision', packet['revision'],
+                         '--user-approval', reply, success=success)
+
+    def planning_hook(self, event):
+        payload = {'hook_event_name': event, 'session_id': 'planning-session', 'cwd': str(self.root)}
+        result = subprocess.run([sys.executable, '-B', str(SCRIPTS / 'codex_hook.py')], input=json.dumps(payload),
+                                text=True, capture_output=True, timeout=10, check=True)
+        return json.loads(result.stdout)
+
     def test_full_pipeline_and_integration_completion(self):
-        self.planning_ready()
-        self.assertEqual(self.call('planning-status', PLAN)['phase'], 'ready')
-        execution = self.call('start-execution', PLAN)
+        plan = self.planning_ready()
+        self.assertEqual(self.call('planning-status', PLAN)['phase'], 'awaiting_user_review')
+        execution = self.start(plan)
         self.assertEqual(execution['task_ids'], ['build', 'integrate'])
         self.assertEqual(self.state('build')['execution_mode'], 'planned')
         self.call('claim', 'build', '--owner', 'implementer-1')
@@ -79,12 +89,57 @@ class PlanningTests(GateCase):
         self.submit('plan', success=False)
         self.submit('spec')
         self.submit('plan', success=False)
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('spec needs independent approval',
+                      self.start({'revision': 'no-plan-yet'}, success=False)['error'])
         self.assertEqual(self.call('list'), [])
 
     def test_execution_cannot_precede_plan_review(self):
-        self.register(); self.spec_ready(); self.submit('plan')
-        self.call('start-execution', PLAN, success=False)
+        self.register(); self.spec_ready()
+        plan = self.submit('plan')
+        self.assertIn('plan needs independent approval', self.start(plan, success=False)['error'])
+        self.assertEqual(self.call('list'), [])
+
+    def test_human_review_binds_first_import_to_shown_revision(self):
+        original = self.planning_ready(path='architectural')
+        plan = self.submit('plan')
+        self.review_artifact('plan', plan)
+        self.assertEqual(original['digest'], plan['digest'])
+        self.assertNotEqual(original['revision'], plan['revision'])
+        state_file = self.root / '.review-gate/state.json'
+        before = state_file.read_bytes()
+        for args, missing in [
+            ([], '--revision'),
+            (['--user-approval', 'Approved'], '--revision'),
+            (['--revision', original['revision'], '--user-approval', 'Approved'], '--revision'),
+            (['--revision', plan['revision']], '--user-approval'),
+            (['--revision', plan['revision'], '--user-approval', '  '], '--user-approval'),
+        ]:
+            with self.subTest(args=args):
+                self.assertIn(missing, self.call('start-execution', PLAN, *args, success=False)['error'])
+                self.assertEqual(state_file.read_bytes(), before)
+        self.assertEqual(self.call('list'), [])
+        reply = "Yes, let's implement the version you just showed."
+        execution = self.start(plan, reply=reply)
+        self.assertEqual(execution['user_approval'], reply)
+        self.assertEqual(execution['receipt']['plan_revision'], plan['revision'])
+        self.assertEqual(execution['receipt']['plan_digest'], plan['digest'])
+        self.assertTrue(execution['started_at'])
+
+    def test_stop_yields_for_human_plan_review(self):
+        plan = self.planning_ready()
+        self.call('bind', '--session', 'planning-session', '--plan', PLAN)
+        status = self.call('plan-status', PLAN)
+        self.assertFalse(status['complete'])
+        self.assertEqual(status['planning']['phase'], 'awaiting_user_review')
+        context = self.planning_hook('SessionStart')['hookSpecificOutput']['additionalContext']
+        self.assertIn('awaiting_user_review', context)
+        self.assertIn(plan['revision'], context)
+        self.assertEqual(self.planning_hook('Stop'), {})
+        self.call('planning-block', PLAN, '--author', 'planner', '--reason', 'User asked to hold this plan')
+        self.assertIn('blocked', self.start(plan, success=False)['error'])
+        self.assertNotIn('decision', self.planning_hook('Stop'))
+        self.call('planning-resume', PLAN, '--author', 'planner', '--reason', 'User returned')
+        self.assertEqual(self.call('planning-status', PLAN)['phase'], 'awaiting_user_review')
         self.assertEqual(self.call('list'), [])
 
     def test_planning_only_can_finish_without_execution_or_stop_continuation(self):
@@ -93,17 +148,18 @@ class PlanningTests(GateCase):
         status = self.call('plan-status', PLAN)
         self.assertTrue(status['complete'])
         self.assertEqual(status['completion_scope'], 'planning')
-        self.call('start-execution', PLAN, success=False)
+        self.assertEqual(status['planning']['phase'], 'ready')
+        self.assertIn('Implementation intent', self.start(packet, success=False)['error'])
         self.call('bind', '--session', 'planning-session', '--plan', PLAN)
-        payload = {'hook_event_name': 'Stop', 'session_id': 'planning-session', 'cwd': str(self.root)}
-        result = subprocess.run([sys.executable, '-B', str(SCRIPTS / 'codex_hook.py')], input=json.dumps(payload),
-                                text=True, capture_output=True, timeout=10)
-        self.assertEqual(json.loads(result.stdout), {})
+        self.assertEqual(self.planning_hook('Stop'), {})
         self.assertEqual(self.call('list'), [])
-        self.call('planning-authorize', PLAN, '--author', 'planner', '--reason', 'User now requested implementation')
-        self.assertFalse(self.call('plan-status', PLAN)['complete'])
+        reply = 'Please implement this reviewed plan.'
+        self.call('planning-authorize', PLAN, '--author', 'planner', '--reason', reply)
+        pending = self.call('plan-status', PLAN)
+        self.assertFalse(pending['complete'])
+        self.assertEqual(pending['planning']['phase'], 'awaiting_user_review')
         self.assertEqual(self.call('list'), [])
-        self.call('start-execution', PLAN)
+        self.start(packet, reply=reply)
 
     def test_authorization_cannot_bypass_block_or_supersession(self):
         self.register(execute=False)
@@ -142,23 +198,23 @@ class PlanningTests(GateCase):
         self.assertNotEqual(fresh_spec['revision'], old_spec_id)
         self.assertEqual(fresh_spec['digest'], old_plan['approved_spec']['digest'])
         self.review_artifact('spec', dict(fresh_spec, revision=old_spec_id), success=False)
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('spec needs independent approval', self.start(old_plan, success=False)['error'])
         self.review_artifact('spec', fresh_spec)
         self.assertEqual(self.call('planning-status', PLAN)['phase'], 'drafting_plan')
         self.call('plan-packet', PLAN, success=False)
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('older spec revision', self.start(old_plan, success=False)['error'])
         fresh_plan = self.submit('plan')
         self.review_artifact('plan', old_plan, success=False)
         self.review_artifact('plan', fresh_plan)
-        self.call('start-execution', PLAN)
+        self.start(fresh_plan)
 
     def test_plan_resubmission_requires_fresh_review(self):
         old = self.planning_ready()
         current = self.submit('plan')
         self.review_artifact('plan', old, success=False)
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('plan needs independent approval', self.start(current, success=False)['error'])
         self.review_artifact('plan', current)
-        self.call('start-execution', PLAN)
+        self.start(current)
 
     def test_spec_findings_must_be_resolved(self):
         self.register(); packet = self.submit('spec')
@@ -173,11 +229,11 @@ class PlanningTests(GateCase):
     def test_plan_findings_must_be_resolved(self):
         self.register(); self.spec_ready(); packet = self.submit('plan')
         self.review_artifact('plan', packet, report('changes_requested', [finding()]))
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('plan needs independent approval', self.start(packet, success=False)['error'])
         fresh = self.submit('plan')
         self.review_artifact('plan', fresh, success=False)
         self.review_artifact('plan', fresh, report(resolutions=[{'id': 'F1', 'status': 'false_positive', 'evidence': 'Existing check already covers the boundary'}]))
-        self.call('start-execution', PLAN)
+        self.start(fresh)
 
     def test_open_spec_questions_block_approval(self):
         self.register()
@@ -190,7 +246,7 @@ class PlanningTests(GateCase):
         value = plan_document(); value['open_questions'] = ['Which verification fixture should be used?']
         packet = self.submit('plan', value)
         self.review_artifact('plan', packet, success=False)
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('open questions', self.start(packet, success=False)['error'])
 
     def test_coverage_gaps_and_wrong_criterion_rejected(self):
         self.register(); self.spec_ready()
@@ -268,25 +324,32 @@ class PlanningTests(GateCase):
         self.register(name='example-plan', success=False)
 
     def test_start_is_atomic_on_task_id_collision(self):
-        self.planning_ready()
+        plan = self.planning_ready()
         self.create(name='integrate', claim=False)
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('already exists: integrate', self.start(plan, success=False)['error'])
         self.assertEqual([task['id'] for task in self.call('list')], ['integrate'])
 
     def test_repeated_start_is_idempotent(self):
-        self.planning_ready()
-        first = self.call('start-execution', PLAN)
-        second = self.call('start-execution', PLAN)
-        self.assertEqual(first, second)
+        plan = self.planning_ready()
+        first = self.start(plan)
+        state_file = self.root / '.review-gate/state.json'
+        before = state_file.read_bytes()
+        self.assertEqual(first, self.call('start-execution', PLAN))
+        self.assertEqual(first, self.start(plan))
+        self.start(plan, reply='Different reply', success=False)
+        self.start({'revision': 'stale'}, success=False)
+        self.call('start-execution', PLAN, '--revision', plan['revision'], success=False)
+        self.assertEqual(state_file.read_bytes(), before)
         self.assertEqual(len(self.call('list')), 2)
 
     def test_imported_artifacts_are_frozen(self):
-        self.planning_ready(); self.call('start-execution', PLAN)
+        self.start(self.planning_ready())
         self.submit('spec', success=False)
         self.submit('plan', success=False)
 
     def test_supersession_rejects_execution_and_same_owner_claim(self):
-        self.planning_ready(); self.call('start-execution', PLAN)
+        plan = self.planning_ready()
+        self.start(plan)
         self.call('claim', 'build', '--owner', 'implementer-1')
         self.call('planning-supersede', PLAN, '--author', 'planner', '--reason', 'Requirements changed')
         for action in ('claim', 'verify', 'request-review', 'complete'):
@@ -294,11 +357,11 @@ class PlanningTests(GateCase):
             self.assertIn('superseded', error['error'])
         self.call('packet', 'build', success=False)
         self.call('review', 'build', '--round', 'stale', '--reviewer', 'reviewer', '--report', '-', payload=report(), success=False)
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('superseded', self.start(plan, success=False)['error'])
         self.assertFalse(self.call('plan-status', PLAN)['complete'])
 
     def test_recovery_and_release_do_not_restore_superseded_eligibility(self):
-        self.planning_ready(); self.call('start-execution', PLAN)
+        self.start(self.planning_ready())
         self.call('claim', 'build', '--owner', 'implementer-1')
         self.call('planning-supersede', PLAN, '--author', 'planner', '--reason', 'Replace plan')
         self.call('recover', 'build', '--owner', 'implementer-1', '--new-owner', 'replacement', '--reason', 'Original agent unavailable')
@@ -308,7 +371,7 @@ class PlanningTests(GateCase):
         self.assertIsNone(self.state('build')['owner'])
 
     def test_reopen_does_not_restore_superseded_eligibility(self):
-        self.planning_ready(); self.call('start-execution', PLAN)
+        self.start(self.planning_ready())
         self.call('claim', 'build', '--owner', 'implementer-1'); self.finish('build')
         self.call('planning-supersede', PLAN, '--author', 'planner', '--reason', 'Replace plan')
         self.call('reopen', 'build', '--owner', 'implementer-1', '--reason', 'Revisit implementation')
@@ -319,10 +382,7 @@ class PlanningTests(GateCase):
         self.call('bind', '--session', 'planning-session', '--plan', PLAN)
         self.call('planning-block', PLAN, '--author', 'planner', '--reason', 'Need a user decision')
         self.submit('spec', success=False)
-        payload = {'hook_event_name': 'Stop', 'session_id': 'planning-session', 'cwd': str(self.root)}
-        result = subprocess.run([sys.executable, '-B', str(SCRIPTS / 'codex_hook.py')], input=json.dumps(payload),
-                                text=True, capture_output=True, timeout=10)
-        response = json.loads(result.stdout)
+        response = self.planning_hook('Stop')
         self.assertIn('systemMessage', response)
         self.assertNotIn('decision', response)
         self.call('planning-resume', PLAN, '--author', 'planner', '--reason', 'Decision received')
@@ -335,7 +395,7 @@ class PlanningTests(GateCase):
             'findings': 'The current function returns 42.', 'evidence': ['python probe returned 42'],
             'recommendation': 'Keep the existing implementation.', 'limitations': []})
         self.assertTrue(self.call('plan-status', PLAN)['complete'])
-        self.call('start-execution', PLAN, success=False)
+        self.assertIn('spike cannot', self.start({'revision': 'no-plan-for-a-spike'}, success=False)['error'])
         self.assertEqual(self.call('list'), [])
 
     def test_spike_requires_actual_report_fields(self):
@@ -354,8 +414,40 @@ class PlanningTests(GateCase):
         self.assertEqual(before, path.read_bytes())
         self.register()
         data = json.loads(path.read_text())
-        self.assertEqual(data['version'], 3)
+        self.assertEqual(data['version'], 4)
         self.assertIn('example', data['tasks'])
+
+    def test_format_three_pending_plan_waits_for_approval_without_rewriting_on_read(self):
+        plan = self.planning_ready()
+        path = self.root / '.review-gate/state.json'
+        data = json.loads(path.read_text())
+        data['version'] = 3
+        path.write_text(json.dumps(data), encoding='utf-8')
+        before = path.read_bytes()
+        self.assertEqual(self.call('planning-status', PLAN)['phase'], 'awaiting_user_review')
+        self.call('start-execution', PLAN, success=False)
+        self.assertEqual(path.read_bytes(), before)
+        self.start(plan)
+        self.assertEqual(json.loads(path.read_text())['version'], 4)
+
+    def test_format_three_import_resumes_with_its_original_receipt(self):
+        plan = self.planning_ready()
+        self.start(plan)
+        path = self.root / '.review-gate/state.json'
+        data = json.loads(path.read_text())
+        data['version'] = 3
+        original = data['planning'][PLAN]['execution']
+        del original['user_approval']
+        path.write_text(json.dumps(data), encoding='utf-8')
+        before = path.read_bytes()
+        self.assertEqual(self.call('planning-status', PLAN)['phase'], 'executing')
+        self.assertEqual(self.call('start-execution', PLAN), original)
+        self.start(plan, success=False)
+        self.assertEqual(path.read_bytes(), before)
+        self.call('claim', 'build', '--owner', 'existing-worker')
+        saved = json.loads(path.read_text())
+        self.assertEqual(saved['version'], 4)
+        self.assertEqual(saved['planning'][PLAN]['execution'], original)
 
     @unittest.skipUnless(LEGACY.is_file(), 'Released v0.2.2 CLI is not installed on this host')
     def test_released_old_cli_rejects_planning_store(self):

@@ -107,8 +107,8 @@ class Store:
         if not self.path.exists():
             return {"version": 3, "workspace": str(self.root), "tasks": {}, "bindings": {}}
         data = json.loads(self.path.read_text(encoding="utf-8"))
-        require(isinstance(data, dict) and data.get("version") in (1, 2, 3), "Unsupported task store")
-        require(not data.get("planning") or data["version"] == 3, "Planning records require store format 3")
+        require(isinstance(data, dict) and data.get("version") in (1, 2, 3, 4), "Unsupported task store")
+        require(not data.get("planning") or data["version"] >= 3, "Planning records require store format 3 or newer")
         require(data.get("workspace") == str(self.root), "Task store belongs to another workspace")
         require(isinstance(data.get("tasks"), dict), "Invalid task store")
         if data["version"] == 1:
@@ -119,6 +119,8 @@ class Store:
         return data
 
     def save(self, data):
+        if data.get("planning"):
+            data["version"] = 4
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=self.directory, delete=False) as output:
             temp = Path(output.name)
             try:

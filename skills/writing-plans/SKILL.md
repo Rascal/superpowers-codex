@@ -1,6 +1,6 @@
 ---
 name: writing-plans
-description: Turn an independently approved spec into detailed task contracts and obtain independent plan review before execution in the Superpowers Codex workflow. Use after spec review or when continuing an existing planning record.
+description: Turn an independently approved spec into a detailed plan, obtain independent review, and present the reviewed revision to the user before implementation. Use after spec review or when continuing an existing Superpowers Codex planning record.
 ---
 
 # Writing plans
@@ -43,13 +43,34 @@ on every implementation task and verifying their combined behavior.
 3. Record the real report and reviewer ID. Fix blocking findings as the author,
    resubmit and re-review. If a finding reveals a spec defect, revise and re-review
    the spec first, then submit a plan against that new approved spec revision.
-4. For planning-only intent, report the approved artifacts and stop at `ready`.
-   Review approval itself is not user authorization to implement.
-5. When implementation is already authorized, record its actual basis with
-   `planning-authorize` if no execution intent was recorded at creation. Do not
-   re-ask for settled authorization. Then run `start-execution`. It atomically
-   imports only the reviewed tasks and binds them to exact planning receipts.
-   Continue with review-gated-development; do not manually recreate those tasks.
+
+## Present the plan for human review
+
+Read the independently approved `plan-packet`. In chat, show what will change,
+the simplest viable approach using existing code, and how the outcome will be
+checked. For each significant addition, name the requirement it serves today and
+what it would take to deploy or maintain. A bounded plan can fit in a few
+sentences. Whenever the chat gives a summary, link a readable copy of the full
+reviewed plan with its steps, affected components and checks. Label the inline
+plan or linked copy with the packet's revision ID and keep that ID with the question.
+
+For planning-only work, deliver the reviewed plan and finish at `ready`. For
+implementation, ask whether to **proceed with this revision, simplify it, or
+hold**. Wait for the user's reply, even when the original brief requested
+implementation. Leave an ambiguous response pending. On resume, use the decision
+on the revision actually shown. If that connection is unclear, show the plan again.
+
+- **Proceed.** A clear go-ahead on the shown revision suffices once. If execution
+  intent is still missing, record it with `planning-authorize` using that same
+  reply. Pass the ID you showed and the actual reply to `start-execution` using
+  `--revision` and `--user-approval`. Then continue with review-gated-development.
+- **Simplify or change.** Record the feedback, revise the plan, obtain fresh
+  independent review, and show the new revision and what changed. If the feedback
+  changes the spec's approach, constraints or scope, revise and re-review the spec
+  first, even if the user-visible goal stays the same.
+- **Hold.** Record the user's reason with `planning-block` and wait. When the
+  user returns, use `planning-resume` to continue the requested discussion or
+  handoff. Starting work still requires their go-ahead on the shown revision.
 
 Read stage verdicts and findings when resuming. A rejected revision needs an author
 update and a new submission; it cannot receive a second verdict. Submitted content

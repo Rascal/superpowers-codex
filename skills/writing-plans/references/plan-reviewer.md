@@ -10,7 +10,10 @@ Review this plan before implementation. Compare every requirement, constraint an
 user decision with the approved spec. Check task coverage, scope, dependency order,
 interface consistency, file ownership, actionable steps, verification quality and
 the final integration check. Inspect repository facts when needed to establish
-whether the proposed steps can actually work. A valid JSON graph is not sufficient.
+whether the proposed steps can actually work. Challenge significant new services,
+dependencies or abstractions when an existing path could meet the requirement.
+Identify the simpler option and the deployment or maintenance cost the user would
+take on. Tie the finding to the actual requirement and code.
 
 Flag missing requirements, conflicting tasks, invented APIs, invalid assumptions,
 checks that could pass without exercising behavior, and steps that leave material

@@ -11,7 +11,8 @@ The plugin's installation directory is never used as a task store.
 ## Plan before creating execution tasks
 
 New work uses [the planning lifecycle](planning.md): brainstorming, spec review,
-plan writing and plan review, then atomic task import. Direct create/adopt below
+plan writing, independent plan review, and the user's go-ahead on the displayed
+revision before atomic task import. Direct create/adopt below
 is only for an explicit execution-only choice. Existing legacy task records remain
 usable without manufactured planning approvals.
 
@@ -169,9 +170,10 @@ gate unbind --session REAL_HOST_SESSION_ID
 ```
 
 Trust the bundled hooks in Codex before relying on them. Binding is explicit and
-per chat. SessionStart returns recovery context; Stop consults plan status and
-requests a continuation for unfinished work. A recorded blocker or an already
-active continuation emits a visible warning instead of another continuation.
+per chat. SessionStart returns the recorded plan status. Stop yields when the plan
+is complete or in `awaiting_user_review`, so the user can consider it. For other
+unfinished work, Stop requests a continuation. A recorded blocker or an already
+active continuation produces a visible warning.
 Interrupt is never blocked. Unknown/unbound chats are unaffected. Hook errors
 are visible and never count as approval. The adapter does not parse transcripts,
 intercept Git commands, or authenticate caller-supplied agent IDs.
@@ -196,5 +198,5 @@ baseline, and full legacy record while clearing eligibility for completion. Fres
 ownership, verification, and review are required. Existing completed history is
 never silently promoted to stronger verification guarantees.
 
-Planning-managed stores use format 3 so older runtimes fail closed. See the
+Writes to stores containing managed plans use format 4 so older runtimes fail closed. See the
 [planning compatibility rules](planning.md#spikes-and-recovery).

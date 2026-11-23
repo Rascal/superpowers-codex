@@ -171,7 +171,12 @@ def planning_status(record):
             phase = 'plan_review'
         else:
             approved_receipt(record)
-            phase = 'executing' if record['execution'] else 'ready'
+            if record['execution']:
+                phase = 'executing'
+            elif record['execution_intent']:
+                phase = 'awaiting_user_review'
+            else:
+                phase = 'ready'
     verdicts = {}
     for stage in STAGES:
         revision = current_revision(record, stage, required=False)

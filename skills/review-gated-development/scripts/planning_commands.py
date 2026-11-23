@@ -73,7 +73,6 @@ def dispatch_planning(store, data, args, task_factory):
                   'execution': None, 'execution_intent': args.execution_intent, 'created_at': now(), 'history': []}
         history(record, 'created', author=args.author.strip())
         data.setdefault('planning', {})[args.plan] = record
-        data['version'] = 3
         return planning_status(record)
     require(args.plan in records, 'Unknown planning record: ' + args.plan)
     record = records[args.plan]
@@ -151,9 +150,17 @@ def dispatch_planning(store, data, args, task_factory):
     if args.action == 'start-execution':
         receipt = approved_receipt(record)
         require(nonempty(record['execution_intent']), 'Implementation intent is not recorded; this is planning-only')
-        if record['execution']:
-            require(record['execution']['receipt'] == receipt, 'Imported planning receipt is stale')
-            return record['execution']
+        previous = record['execution']
+        if previous:
+            require(previous['receipt'] == receipt, 'Imported planning receipt is stale')
+            if args.revision is None and args.user_approval is None:
+                return previous
+        require(args.revision == receipt['plan_revision'],
+                'Pass the current reviewed plan revision shown to the user with --revision')
+        require(nonempty(args.user_approval), 'Pass the user reply approving that revision with --user-approval')
+        if previous:
+            require(args.user_approval == previous.get('user_approval'), 'The recorded user approval cannot be changed')
+            return previous
         spec = current_revision(record, 'spec')['content']
         content = current_revision(record, 'plan')['content']
         validate_plan(content, record, spec, data['tasks'])
@@ -164,7 +171,7 @@ def dispatch_planning(store, data, args, task_factory):
             task['planning_receipt'] = dict(receipt)
             task['history'].append({'action': 'imported_from_plan', 'at': now(), 'receipt': dict(receipt)})
             staged[task['id']] = task
-        execution = {'receipt': receipt, 'task_ids': list(staged), 'started_at': now()}
+        execution = {'receipt': receipt, 'task_ids': list(staged), 'started_at': now(), 'user_approval': args.user_approval}
         data['tasks'].update(staged)
         record['execution'] = execution
         history(record, 'execution_started', task_ids=list(staged))
@@ -180,8 +187,12 @@ def add_planning_parsers(actions):
     create.add_argument('--author', required=True)
     create.add_argument('--brief', required=True)
     create.add_argument('--execution-intent', metavar='REASON')
-    for name in ('planning-status', 'spec-packet', 'plan-packet', 'start-execution'):
+    for name in ('planning-status', 'spec-packet', 'plan-packet'):
         actions.add_parser(name).add_argument('plan')
+    start = actions.add_parser('start-execution')
+    start.add_argument('plan')
+    start.add_argument('--revision', metavar='ID', help='Plan revision shown to the user (required on first import)')
+    start.add_argument('--user-approval', metavar='REPLY', help='User reply approving that revision for implementation')
     for name in ('planning-block', 'planning-resume', 'planning-supersede', 'planning-authorize'):
         action = actions.add_parser(name)
         action.add_argument('plan')

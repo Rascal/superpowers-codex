@@ -33,7 +33,7 @@ def respond(payload):
     if event == "SessionStart":
         return {"hookSpecificOutput": {"hookEventName": event, "additionalContext":
                 "Resume from the review-gate task store, not chat recollection. " + json.dumps(status)}}
-    if status["complete"]:
+    if status["complete"] or status.get("planning", {}).get("phase") == "awaiting_user_review":
         return {}
     reason = "Review-gate plan " + plan + " is incomplete: " + "; ".join(status["issues"])
     if status["blocked"] or payload.get("stop_hook_active"):

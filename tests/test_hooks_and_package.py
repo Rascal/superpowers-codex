@@ -8,7 +8,8 @@ import subprocess
 import sys
 import zipfile
 
-from test_review_gate import GateCase, ROOT, SCRIPTS, contract
+from test_planning import PLAN, plan_document, spec_document
+from test_review_gate import GateCase, ROOT, SCRIPTS, contract, report
 from planning_model import validate_plan, validate_spec
 
 
@@ -172,20 +173,46 @@ class PackageTests(GateCase):
             self.assertIn(plugin_root + "/hooks/hooks.json", names)
             self.assertFalse(any(str(ROOT).encode() in bundle.read(name) for name in names))
 
-    def test_relocated_plugin_runs_without_source_checkout(self):
-        archive = self.build()
-        destination = self.root / "installed plugin with spaces"
-        with zipfile.ZipFile(archive) as bundle:
-            bundle.extractall(destination)
-        script = next(destination.rglob("review_gate.py"))
+    def packaged_cli(self):
+        script = self.extracted_plugin() / "skills/review-gated-development/scripts/review_gate.py"
         workspace = self.root / "consumer project"
         workspace.mkdir()
         (workspace / "app.py").write_text("answer = 42\n", encoding="utf-8")
-        def run(*args, payload=None):
+
+        def run(*args, payload=None, success=True):
             result = subprocess.run([sys.executable, "-B", str(script), "--workspace", str(workspace), *args],
-                                    input=json.dumps(payload) if payload else None, text=True, capture_output=True, timeout=10)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            return json.loads(result.stdout)
+                                    input=json.dumps(payload) if payload is not None else None,
+                                    cwd=workspace, text=True, capture_output=True, timeout=10)
+            self.assertEqual(result.returncode, 0 if success else 1, result.stdout + result.stderr)
+            return json.loads(result.stdout if success else result.stderr)
+
+        return workspace, run
+
+    def test_packaged_plan_waits_for_human_review(self):
+        workspace, run = self.packaged_cli()
+        brief = workspace / 'brief.txt'
+        brief.write_text('Implement the answer in the existing module.', encoding='utf-8')
+        run('planning-create', PLAN, '--path', 'bounded', '--reason', 'Existing module',
+            '--author', 'planner', '--brief', str(brief), '--execution-intent', 'Implement the feature')
+        for stage, artifact in [('spec', spec_document()), ('plan', plan_document())]:
+            packet = run(stage + '-submit', PLAN, '--author', 'planner', '--file', '-', payload=artifact)
+            run(stage + '-review', PLAN, '--revision', packet['revision'], '--reviewer', stage + '-reviewer',
+                '--report', '-', payload=report())
+        shown = run('plan-packet', PLAN)
+        self.assertEqual(run('planning-status', PLAN)['phase'], 'awaiting_user_review')
+        self.assertIn('--revision', run('start-execution', PLAN, success=False)['error'])
+        reply = 'Use the existing module and start implementation.'
+        error = run('start-execution', PLAN, '--revision', shown['approved_spec']['revision'],
+                    '--user-approval', reply, success=False)
+        self.assertIn('--revision', error['error'])
+        self.assertEqual(run('list'), [])
+        execution = run('start-execution', PLAN, '--revision', shown['revision'], '--user-approval', reply)
+        self.assertEqual(execution['receipt']['plan_revision'], shown['revision'])
+        self.assertEqual(execution['user_approval'], reply)
+        self.assertEqual(execution['task_ids'], ['build', 'integrate'])
+
+    def test_relocated_plugin_runs_without_source_checkout(self):
+        workspace, run = self.packaged_cli()
         run("create", "portable", "--contract", "-", "--execution-only", "Isolated relocation test", payload=contract())
         run("claim", "portable", "--owner", "worker")
         evidence = run("verify", "portable", "--owner", "worker")

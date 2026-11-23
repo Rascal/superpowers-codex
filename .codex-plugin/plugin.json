@@ -1,9 +1,9 @@
 {
   "name": "superpowers-codex",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "repository": "https://github.com/Rascal/superpowers-codex",
   "homepage": "https://github.com/Rascal/superpowers-codex",
-  "description": "Adaptive brainstorming, independently reviewed specs and plans, and verified task execution.",
+  "description": "Brainstorm, independently review specs and plans, and approve the plan before verified task execution.",
   "skills": "./skills/",
   "hooks": "./hooks/hooks.json"
 }

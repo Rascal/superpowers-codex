@@ -23,9 +23,10 @@ skill are discoverable. New work starts with brainstorming; existing execution
 records can resume through review-gated-development.
 Explain that task data stays in each target workspace's `.review-gate/`, outside
 the installed plugin. Updating the plugin must preserve that directory.
-Managed planning uses store format 3. Older 0.2 runtimes reject it; do not lower
-the version field to make an older runtime proceed. The new runtime can read
-legacy stores, without claiming their tasks had spec or plan review.
+Upgrade each client that shares the workspace. Version 0.4 reads earlier stores
+and writes format 4 when a store contains managed plans. Existing imports resume
+with their original receipts. Plans awaiting their first import need a human
+decision on the reviewed revision.
 
 Confirm that SessionStart and Stop are listed in Settings > Hooks (or `/hooks` in
 the CLI). An empty list is a discovery failure, not a trust prompt; do not describe
